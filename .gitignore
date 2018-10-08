@@ -1,0 +1,14 @@
+# Ignore baselines folder
+baselines/
+
+# Ignore gym folder
+gym/
+
+#  Ignore venv folder
+venv/
+
+# Ignore pycache folder
+__pycache__/
+
+# Ignore .directory file
+.directory
