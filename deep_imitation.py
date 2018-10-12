@@ -21,30 +21,79 @@ def model(inpt, num_actions, scope, reuse=False):
         out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
         return out
 
-def similarityCheck(obs, ment):
+def similarityCheck(obs, ment, index=-1):
     # Check if the new state s' is similar to any state visited by the mentor.
     # The similarity threshold is set heuristicaly to 20% difference.
-    sim_thres_perc = 0.2
+    sim_thres_perc = 20
 
-    for i in range(len(ment)):
+    if index == -1:
+        for i in range(len(ment)):
+            comparisons = []
+            m_s = ment[i]
+
+            for j in range(len(m_s)):
+                diff_perc = ((obs[j] - m_s[j]) / m_s[j]) * 100
+                comp = abs(diff_perc) < sim_thres_perc
+                comparisons.append(comp)
+            if (all(comparisons)):
+                # print("found")
+                # print(m_s)
+                # print(obs)
+                return i
+
+        return -1
+    else:
         comparisons = []
-        m_s = ment[i]
+        m_s = ment[index+1]
 
         for j in range(len(m_s)):
-            comparisons.append((m_s[j] > (1-sim_thres_perc)*obs[j]) and (m_s[j] < (1+sim_thres_perc)*obs[j]))
+            diff_perc = ((obs[j] - m_s[j]) / m_s[j]) * 100
+            comp = abs(diff_perc) < sim_thres_perc
+            comparisons.append(comp)
         if (all(comparisons)):
-            print("found")
-            print(m_s)
-            print(obs)
-            return i
+            # print("MENTOR'S ACTION FOUND AT: ", index)
+            # print(m_s)
+            # print(obs)
+            return True
 
-    return -1
+        return False
+    
 
 def augmentReward(rew, obs, ment, index):
-    bias = 2000
-    newReward = rew + 2000
+    bias = 1
+    newReward = rew + bias
     
     return newReward
+
+def readMentorExperieces():
+
+    mentor_tr = []
+    
+    print("--Creating mentor_demonstrations buffer..")
+
+    with open('mentor_demonstrations_NN_0.csv', 'r', newline='') as csvfile:
+        data_reader = csv.reader(csvfile, delimiter=',')
+        for r in data_reader:
+            mentor_tr.append([float(i) for i in r])
+    with open('mentor_demonstrations_NN_1.csv', 'r', newline='') as csvfile:
+        data_reader = csv.reader(csvfile, delimiter=',')
+        for r in data_reader:
+            mentor_tr.append([float(i) for i in r])
+    with open('mentor_demonstrations_NN_2.csv', 'r', newline='') as csvfile:
+        data_reader = csv.reader(csvfile, delimiter=',')
+        for r in data_reader:
+            mentor_tr.append([float(i) for i in r])
+    with open('mentor_demonstrations_NN_3.csv', 'r', newline='') as csvfile:
+        data_reader = csv.reader(csvfile, delimiter=',')
+        for r in data_reader:
+            mentor_tr.append([float(i) for i in r])
+    with open('mentor_demonstrations_NN_4.csv', 'r', newline='') as csvfile:
+        data_reader = csv.reader(csvfile, delimiter=',')
+        for r in data_reader:
+            mentor_tr.append([float(i) for i in r])
+    return mentor_tr
+
+
 
 if __name__ == '__main__':
     with U.make_session():
@@ -52,33 +101,10 @@ if __name__ == '__main__':
         env = gym.make("CartPole-v0")
 
         mentor_tr = []
-        mentor_tr_tmp = []
 
         _gamma = 0.99
 
-        print("--Creating mentor_demonstrations buffer..")
-        
-        with open('mentor_demonstrations_NN_0.csv', 'r', newline='') as csvfile:
-            data_reader = csv.reader(csvfile, delimiter=',')
-            for r in data_reader:
-                
-                mentor_tr.append([float(i) for i in r])
-        with open('mentor_demonstrations_NN_1.csv', 'r', newline='') as csvfile:
-            data_reader = csv.reader(csvfile, delimiter=',')
-            for r in data_reader:
-                mentor_tr.append([float(i) for i in r])
-        with open('mentor_demonstrations_NN_2.csv', 'r', newline='') as csvfile:
-            data_reader = csv.reader(csvfile, delimiter=',')
-            for r in data_reader:
-                mentor_tr.append([float(i) for i in r])
-        with open('mentor_demonstrations_NN_3.csv', 'r', newline='') as csvfile:
-            data_reader = csv.reader(csvfile, delimiter=',')
-            for r in data_reader:
-                mentor_tr.append([float(i) for i in r])
-        with open('mentor_demonstrations_NN_4.csv', 'r', newline='') as csvfile:
-            data_reader = csv.reader(csvfile, delimiter=',')
-            for r in data_reader:
-                mentor_tr.append([float(i) for i in r])
+        mentor_tr = readMentorExperieces()
 
         # Size of mentor's transitions
         N = len(mentor_tr)
@@ -120,6 +146,8 @@ if __name__ == '__main__':
             similarityIndex = similarityCheck(obs, mentor_tr)
             if similarityIndex != -1:
                 rew = augmentReward(rew, obs, mentor_tr, similarityIndex)
+                if similarityCheck(new_obs, mentor_tr, similarityIndex):
+                    mentor_tr_actions[similarityIndex] = action
 
             # Store transition in the replay buffer.
             replay_buffer.add(obs, action, rew, new_obs, float(done))
@@ -135,6 +163,12 @@ if __name__ == '__main__':
             if is_solved:
                 # Show off the result
                 env.render()
+                cnt = 0
+                for actn in mentor_tr_actions:
+                    if actn != None:
+                        cnt += 1
+                print(cnt)
+                exit()
             else:
                 # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
                 if t > 1000:
@@ -143,8 +177,7 @@ if __name__ == '__main__':
                         trainAugmented(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
                     else:
                         train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
-                        print(debug)
-                        exit()
+
                 # Update target network periodically.
                 if t % 1000 == 0:
                     update_target()
