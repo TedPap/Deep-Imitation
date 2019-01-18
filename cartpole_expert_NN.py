@@ -57,7 +57,10 @@ if __name__ == '__main__':
             new_obs, rew, done, _ = env.step(action)
             # print("DONE: ", done," REWARD: ", rew)
             # Store transition in the replay buffer.
-            replay_buffer.add(obs, action, rew, new_obs, float(done))
+            ment_obs = []
+            ment_obs_tp1 = []
+            ment_act = 0
+            replay_buffer.add(obs, action, rew, new_obs, float(done), ment_obs, ment_obs_tp1, ment_act)
             obs = new_obs
 
             episode_rewards[-1] += rew
@@ -71,11 +74,11 @@ if __name__ == '__main__':
                 env.render()
                 if len(exp_demo) < N:
                     temp_list = list(obs)
-                    temp_list.append(done)
-                    temp_list.append(action)
+                    # temp_list.append(done)
+                    # temp_list.append(action)
                     exp_demo.append(temp_list)
                 else:
-                    with open('expert_demonstrations_NN.csv', 'w', newline='') as csvfile:
+                    with open('mentor_demonstrations_NN.csv', 'w', newline='') as csvfile:
                         data_writer = csv.writer(csvfile, delimiter=',')
                         for row in exp_demo:
                             data_writer.writerow(row)
@@ -84,7 +87,7 @@ if __name__ == '__main__':
             else:
                 # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
                 if t > 1000:
-                    obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(32)
+                    obses_t, actions, rewards, obses_tp1, dones, ment_obs, ment_obs_tp1, ment_act = replay_buffer.sample(32)
                     train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
                 # Update target network periodically.
                 if t % 1000 == 0:

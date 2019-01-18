@@ -50,6 +50,26 @@ def readMentorExperieces():
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
+    # with open('mentor_demonstrations_NN_5.csv', 'r', newline='') as csvfile:
+    #     data_reader = csv.reader(csvfile, delimiter=',')
+    #     for r in data_reader:
+    #         mentor_tr.append([float(i) for i in r])
+    # with open('mentor_demonstrations_NN_6.csv', 'r', newline='') as csvfile:
+    #     data_reader = csv.reader(csvfile, delimiter=',')
+    #     for r in data_reader:
+    #         mentor_tr.append([float(i) for i in r])
+    # with open('mentor_demonstrations_NN_7.csv', 'r', newline='') as csvfile:
+    #     data_reader = csv.reader(csvfile, delimiter=',')
+    #     for r in data_reader:
+    #         mentor_tr.append([float(i) for i in r])
+    # with open('mentor_demonstrations_NN_8.csv', 'r', newline='') as csvfile:
+    #     data_reader = csv.reader(csvfile, delimiter=',')
+    #     for r in data_reader:
+    #         mentor_tr.append([float(i) for i in r])
+    # with open('mentor_demonstrations_NN_9.csv', 'r', newline='') as csvfile:
+    #     data_reader = csv.reader(csvfile, delimiter=',')
+    #     for r in data_reader:
+    #         mentor_tr.append([float(i) for i in r])
     return mentor_tr
 
 def similarityCheck(obs, ment, ment_act):
@@ -106,6 +126,11 @@ def updateMentorActions(obs, new_obs, ment, ment_act, simList, action, env):
 
     return mentor_actions_index_list
 
+def updateOldErrors():
+
+    return
+
+
 def augmentReward(rew, obs, ment, index):
     bias = 20
     newReward = rew + bias
@@ -118,11 +143,13 @@ if __name__ == '__main__':
         with U.make_session():
             # Create the environment
             env = gym.make("CartPole-v0")
-
-            # mentor_tr = []
+            
             _gamma = 0.99
             oscillating = False
             mode = "0"
+
+            oldErrors = []
+            oldErrorStates = []
 
             print("Press 1 to enable imitation, 2 otherwise")
             while mode != "1" and mode != "2":
@@ -221,10 +248,12 @@ if __name__ == '__main__':
                     if t > 1000:
                         obses_t, actions, rewards, obses_tp1, dones, ment_obs, ment_obs_tp1, ment_act = replay_buffer.sample(32)
                         if mode == "1":
-                            trainAugmented(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards), ment_obs, ment_obs_tp1, ment_act)
+                            trainAugmented(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards), ment_obs, ment_obs_tp1, ment_act, 0.5)
+                            # print(asdf)
+                            # input("holding")
                         else:
-                            # trainAugmented2(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards), ment_obs, ment_obs_tp1, ment_act)
                             train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
+
 
                     # Update target network periodically.
                     if t % 1000 == 0:
@@ -235,7 +264,7 @@ if __name__ == '__main__':
                     if oscillating:
                         print("OSCILLATING")
                     
-                    y.append(round(np.mean(episode_rewards[-101:-1]), 1))
+                    y.append(np.mean(episode_rewards[-101:-1]))
                     cnt = 0
                     for actn in mentor_tr_actions:
                         if actn != None:
@@ -243,7 +272,6 @@ if __name__ == '__main__':
                     logger.record_tabular("mentor actions", cnt)
                     logger.record_tabular("steps", t)
                     logger.record_tabular("episodes", len(episode_rewards))
-                    # logger.record_tabular("mean episode reward", round(np.mean(episode_rewards[-101:-1]), 1))
                     logger.record_tabular("mean episode reward", np.mean(episode_rewards[-101:-1]))
                     logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                     logger.dump_tabular()
