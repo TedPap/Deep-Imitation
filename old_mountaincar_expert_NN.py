@@ -22,6 +22,8 @@ def model(inpt, num_actions, scope, reuse=False):
     with tf.variable_scope(scope, reuse=reuse):
         out = inpt
         out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
+        out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
+        out = layers.fully_connected(out, num_outputs=64, activation_fn=tf.nn.tanh)
         out = layers.fully_connected(out, num_outputs=num_actions, activation_fn=None)
         return out
 
@@ -126,64 +128,27 @@ def updateMentorActions(obs, new_obs, ment, ment_act, simList, action, env):
 
     return mentor_actions_index_list
 
-def updateOldErrors():
-
-    return
-
-
-def augmentReward(rew, obs, ment, index):
-    bias = 20
-    newReward = rew + bias
-    
-    return newReward
-
-
 if __name__ == '__main__':
     try:
         with U.make_session():
             # Create the environment
-            env = gym.make("CartPole-v0")
+            env = gym.make("MountainCar-v0")
             
             _gamma = 0.99
             oscillating = False
-            mode = "0"
+            mode = "2"
 
             oldErrors = []
             oldErrorStates = []
 
-            print("Press 1 to enable imitation, 2 otherwise")
-            while mode != "1" and mode != "2":
-                mode = input("--> ")
+            # print("Press 1 to enable imitation, 2 otherwise")
+            # while mode != "1" and mode != "2":
+            #     mode = input("--> ")
 
-            mentor_tr = readMentorExperieces()
+            # mentor_tr = readMentorExperieces()
 
             # Size of mentor's transitions
-            N = len(mentor_tr)
-
-            print("--Initializing mentor_actions buffer..")
-            mentor_tr_actions = [None] * N
-
-            # Create all the functions necessary to train the model
-            act, train, trainAugmented, update_target, debug = deepq.build_train_imitation(
-                make_obs_ph=lambda name: ObservationInput(env.observation_space, name=name),
-                q_func=model,
-                num_actions=env.action_space.n,
-                optimizer=tf.train.AdamOptimizer(learning_rate=5e-4),
-                gamma=_gamma,
-            )
-            # Create the replay buffer
-            print("--Initializing experience replay buffer..")
-            replay_buffer = ReplayBuffer(50000)
-            # Create the schedule for exploration starting from 1 (every action is random) down to
-            # 0.02 (98% of actions are selected according to values predicted by the model).
-            exploration = LinearSchedule(schedule_timesteps=10000, initial_p=1.0, final_p=0.02)
-
-            # Initialize the parameters and copy them to the target network.
-            U.initialize()
-            update_target()
-
-            episode_rewards = [0.0]
-            obs = env.reset()
+            # N = len(mentor_tr)
 
             t = 0
             is_solved = False
@@ -202,7 +167,36 @@ if __name__ == '__main__':
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                             0.0, 0.0]
 
-            y = [0]
+            y = [-200.0]
+
+            exp_demo = []
+            temp_list = []
+            N = 1000
+
+            print("--Initializing mentor_actions buffer..")
+            mentor_tr_actions = [None] * N
+
+            # Create all the functions necessary to train the model
+            act, train, trainAugmented, update_target, debug = deepq.build_train_imitation(
+                make_obs_ph=lambda name: ObservationInput(env.observation_space, name=name),
+                q_func=model,
+                num_actions=1,
+                optimizer=tf.train.AdamOptimizer(learning_rate=5e-4),
+                gamma=_gamma,
+            )
+            # Create the replay buffer
+            print("--Initializing experience replay buffer..")
+            replay_buffer = ReplayBuffer(50000)
+            # Create the schedule for exploration starting from 1 (every action is random) down to
+            # 0.02 (98% of actions are selected according to values predicted by the model).
+            exploration = LinearSchedule(schedule_timesteps=10000, initial_p=1.0, final_p=0.02)
+
+            # Initialize the parameters and copy them to the target network.
+            U.initialize()
+            update_target()
+
+            episode_rewards = [0.0]
+            obs = env.reset()
 
             while True:
                 # Take action and update exploration to the newest value
@@ -210,31 +204,9 @@ if __name__ == '__main__':
                 new_obs, rew, done, _ = env.step(action)
 
                 # Check if the new state s' is similar to any state visited by the mentor.
-                if mode == "1":
-                    similarity_list = similarityCheck(obs, mentor_tr, mentor_tr_actions)
-                    similarity = len(similarity_list) != 0
-                    if similarity and not is_solved:
-                        # rew = augmentReward(rew, obs, mentor_tr, similarity_list)
-                        ment_index_list = updateMentorActions(obs, new_obs, mentor_tr, mentor_tr_actions, similarity_list, action, env)
-                        if len(ment_index_list) > 0:
-                            ment_index = random.choice(ment_index_list)
-                            ment_obs = mentor_tr[ment_index]
-                            ment_obs_tp1 = mentor_tr[ment_index+1]
-                            ment_act = mentor_tr_actions[ment_index]
-                        else:
-                            ment_index = random.choice(similarity_list)
-                            ment_obs = mentor_tr[ment_index]
-                            ment_obs_tp1 = mentor_tr[ment_index+1]
-                            ment_act = random.randint(0, env.action_space.n)
-                    else:
-                        ment_index = random.randint(0, len(mentor_tr)-2)
-                        ment_obs = mentor_tr[ment_index]
-                        ment_obs_tp1 = mentor_tr[ment_index+1]
-                        ment_act = random.randint(0, env.action_space.n)
-                else:
-                    ment_obs = []
-                    ment_obs_tp1 = []
-                    ment_act = 0
+                ment_obs = []
+                ment_obs_tp1 = []
+                ment_act = 0
 
                 # Store transition in the replay buffer.
                 replay_buffer.add_imitation(obs, action, rew, new_obs, float(done), ment_obs, ment_obs_tp1, ment_act)
@@ -251,21 +223,32 @@ if __name__ == '__main__':
                 if done:
                     obs = env.reset()
                     episode_rewards.append(0)
+                    print(np.mean(episode_rewards[-101:-1]))
 
-                is_solved = t > 100 and np.mean(episode_rewards[-101:-1]) >= 200
+                is_solved = t > 100 and np.mean(episode_rewards[-101:-1]) > -155
 
                 if is_solved:
                     # Show off the result
                     env.render()
+                    if len(exp_demo) < N:
+                        temp_list = list(obs)
+                        exp_demo.append(temp_list)
+                    else:
+                        with open('mountaincar_mentor_demonstrations_NN_00.csv', 'w', newline='') as csvfile:
+                            data_writer = csv.writer(csvfile, delimiter=',')
+                            for row in exp_demo:
+                                data_writer.writerow(row)
+                        break
                 else:
                     # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
                     if t > 1000:
                         obses_t, actions, rewards, obses_tp1, dones, ment_obs, ment_obs_tp1, ment_act = replay_buffer.sample_imitation(32)
-                        if mode == "1":
-                            old_td_error = trainAugmented(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards), ment_obs, ment_obs_tp1, ment_act, old_td_error, old_imp_weights)
-                            old_imp_weights = np.ones_like(rewards)
-                        else:
-                            train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
+                        # if mode == "1":
+                        #     old_td_error = trainAugmented(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards), ment_obs, ment_obs_tp1, ment_act, old_td_error, old_imp_weights)
+                        #     old_imp_weights = np.ones_like(rewards)
+                        # else:
+                        #     
+                        train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
 
 
                     # Update target network periodically.
@@ -289,21 +272,21 @@ if __name__ == '__main__':
                     logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                     logger.dump_tabular()
 
-                    with open("log1-imitation-00.csv",  mode='a') as csvfile:
-                            filewriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                            filewriter.writerow([len(episode_rewards), np.mean(episode_rewards[-101:-1])])
+                    # with open("log-imitation-00.csv",  mode='a') as csvfile:
+                    #         filewriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                    #         filewriter.writerow([len(episode_rewards), np.mean(episode_rewards[-101:-1])])
                     
-                    if(len(episode_rewards) >= 1000):
-                        exit()   
+                    # if(len(episode_rewards) >= 1000):
+                    #     exit()   
 
                     x = np.linspace(0, len(episode_rewards), num=len(y))
                     xmax = len(episode_rewards)
                     
                     plt.clf()
                     plt.plot(x, y, label='mean episode reward')
-                    plt.axis([0, xmax, 0, 210])
+                    plt.axis([0, xmax, -210, 110])
                     plt.xticks(np.arange(0, len(episode_rewards), step=50), rotation=45)
-                    plt.yticks(np.arange(0, 210, step=10))
+                    plt.yticks(np.arange(-210, 110, step=10))
                     plt.xlabel('time')
                     plt.ylabel('reward')
                     plt.title("deep_imitation: mean episode reward")
@@ -316,14 +299,12 @@ if __name__ == '__main__':
         try:
             x = np.linspace(0, len(episode_rewards), num=len(y))
             xmax = len(episode_rewards)
-            print(len(x))
-            print(len(y))
 
             plt.clf()
             plt.plot(x, y, label='mean episode reward')
-            plt.axis([0, xmax, 0, 210])
+            plt.axis([0, xmax, -210, 110])
             plt.xticks(np.arange(0, len(episode_rewards), step=50), rotation=45)
-            plt.yticks(np.arange(0, 210, step=10))
+            plt.yticks(np.arange(-210, 110, step=10))
             plt.xlabel('time')
             plt.ylabel('reward')
             plt.title("deep_imitation: mean episode reward")

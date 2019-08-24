@@ -296,6 +296,7 @@ def build_train_imitation(make_obs_ph, q_func, num_actions, optimizer, grad_norm
         
         final_td_error, final_optimize_expr = tf.cond(tf.greater((ment_weighted_error-old_weighted_error)**2, (aug_weighted_error-old_weighted_error)**2), temp_func1, temp_func2)
 
+
         # update_target_fn will be called periodically to copy Q network to target Q network
         update_target_expr = []
         for var, var_target in zip(sorted(q_func_vars, key=lambda v: v.name),
@@ -356,23 +357,23 @@ def readMentorExperieces():
     
     print("--Creating mentor_demonstrations buffer..")
 
-    with open('mountaincar_mentor_demonstrations_NN_00.csv', 'r', newline='') as csvfile:
+    with open('log-control-03.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mountaincar_mentor_demonstrations_NN_01.csv', 'r', newline='') as csvfile:
+    with open('log-control-18.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mountaincar_mentor_demonstrations_NN_02.csv', 'r', newline='') as csvfile:
+    with open('log-control-01.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mountaincar_mentor_demonstrations_NN_03.csv', 'r', newline='') as csvfile:
+    with open('log-control-06.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mountaincar_mentor_demonstrations_NN_04.csv', 'r', newline='') as csvfile:
+    with open('log-control-12.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
@@ -457,17 +458,13 @@ if __name__ == '__main__':
             
             _gamma = 0.99
             oscillating = False
-            mode = "0"
-
-
-            print("Press 1 to enable imitation, 2 otherwise")
-            while mode != "1" and mode != "2":
-                mode = input("--> ")
-
-            mentor_tr = readMentorExperieces()
+            mode = "2"
 
             # Size of mentor's transitions
-            N = len(mentor_tr)
+            N = 5000
+            y = [-200]
+            exp_demo = []
+            temp_list = []
 
             print("--Initializing mentor_actions buffer..")
             mentor_tr_actions = [None] * N
@@ -482,8 +479,7 @@ if __name__ == '__main__':
             )
             # Create the replay buffer
             print("--Initializing experience replay buffer..")
-            replay_buffer = ReplayBuffer(4)
-            # replay_buffer = ReplayBuffer(50000)
+            replay_buffer = ReplayBuffer(50000)
             # Create the schedule for exploration starting from 1 (every action is random) down to
             # 0.02 (98% of actions are selected according to values predicted by the model).
             exploration = LinearSchedule(schedule_timesteps=10000, initial_p=1.0, final_p=0.02)
@@ -510,39 +506,15 @@ if __name__ == '__main__':
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                             0.0, 0.0]
-            y = [-200]
 
             while True:
                 # Take action and update exploration to the newest value
                 action = act(obs[None], update_eps=exploration.value(t))[0]
                 new_obs, rew, done, _ = env.step(action)
 
-                # Check if the new state s' is similar to any state visited by the mentor.
-                if mode == "1":
-                    similarity_list = similarityCheck(obs, mentor_tr, mentor_tr_actions)
-                    similarity = len(similarity_list) != 0
-                    if similarity and not is_solved:
-                        # rew = augmentReward(rew, obs, mentor_tr, similarity_list)
-                        ment_index_list = updateMentorActions(obs, new_obs, mentor_tr, mentor_tr_actions, similarity_list, action, env)
-                        if len(ment_index_list) > 0:
-                            ment_index = random.choice(ment_index_list)
-                            ment_obs = mentor_tr[ment_index]
-                            ment_obs_tp1 = mentor_tr[ment_index+1]
-                            ment_act = mentor_tr_actions[ment_index]
-                        else:
-                            ment_index = random.choice(similarity_list)
-                            ment_obs = mentor_tr[ment_index]
-                            ment_obs_tp1 = mentor_tr[ment_index+1]
-                            ment_act = random.randint(0, env.action_space.n)
-                    else:
-                        ment_index = random.randint(0, len(mentor_tr)-2)
-                        ment_obs = mentor_tr[ment_index]
-                        ment_obs_tp1 = mentor_tr[ment_index+1]
-                        ment_act = random.randint(0, env.action_space.n)
-                else:
-                    ment_obs = []
-                    ment_obs_tp1 = []
-                    ment_act = 0
+                ment_obs = []
+                ment_obs_tp1 = []
+                ment_act = 0
 
                 # Store transition in the replay buffer.
                 replay_buffer.add_imitation(obs, action, rew, new_obs, float(done), ment_obs, ment_obs_tp1, ment_act)
@@ -560,20 +532,25 @@ if __name__ == '__main__':
                     obs = env.reset()
                     episode_rewards.append(0)
 
-                is_solved = t > 100 and np.mean(episode_rewards[-101:-1]) >= 190
+                is_solved = t > 100 and np.mean(episode_rewards[-101:-1]) >= -150
 
                 if is_solved:
                     # Show off the result
                     env.render()
+                    if len(exp_demo) < N:
+                        temp_list = list(obs)
+                        exp_demo.append(temp_list)
+                    else:
+                        with open('mountaincar_mentor_demonstrations_NN_03.csv', 'w', newline='') as csvfile:
+                            data_writer = csv.writer(csvfile, delimiter=',')
+                            for row in exp_demo:
+                                data_writer.writerow(row)
+                        break
                 else:
                     # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
                     if t > 1000:
                         obses_t, actions, rewards, obses_tp1, dones, ment_obs, ment_obs_tp1, ment_act = replay_buffer.sample_imitation(32)
-                        if mode == "1":
-                            old_td_error = trainAugmented(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards), ment_obs, ment_obs_tp1, ment_act, old_td_error, old_imp_weights)
-                            old_imp_weights = np.ones_like(rewards)
-                        else:
-                            train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
+                        train(obses_t, actions, rewards, obses_tp1, dones, np.ones_like(rewards))
 
                     # Update target network periodically.
                     if t % 1000 == 0:
@@ -585,23 +562,11 @@ if __name__ == '__main__':
                         print("OSCILLATING")
                     
                     y.append(np.mean(episode_rewards[-101:-1]))
-                    cnt = 0
-                    for actn in mentor_tr_actions:
-                        if actn != None:
-                            cnt += 1
-                    logger.record_tabular("mentor actions", cnt)
                     logger.record_tabular("steps", t)
                     logger.record_tabular("episodes", len(episode_rewards))
                     logger.record_tabular("mean episode reward", np.mean(episode_rewards[-101:-1]))
                     logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                     logger.dump_tabular()
-
-                    with open("log-imitation-00.csv",  mode='a') as csvfile:
-                            filewriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                            filewriter.writerow([len(episode_rewards), np.mean(episode_rewards[-101:-1])])
-                    
-                    if(len(episode_rewards) >= 1000):
-                        exit()   
 
                     x = np.linspace(0, len(episode_rewards), num=len(y))
                     xmax = len(episode_rewards)
