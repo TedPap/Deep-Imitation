@@ -1,9 +1,9 @@
 import gym
 import csv
+import sys
 import itertools
 import matplotlib.pyplot as plt
 import numpy as np
-import csv
 import tensorflow as tf
 import random
 import keyboard as kbd
@@ -356,23 +356,23 @@ def readMentorExperieces():
     
     print("--Creating mentor_demonstrations buffer..")
 
-    with open('mentor_demonstrations_NN_00.csv', 'r', newline='') as csvfile:
+    with open('mountaincar_mentor_demonstrations_NN_00.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mentor_demonstrations_NN_01.csv', 'r', newline='') as csvfile:
+    with open('mountaincar_mentor_demonstrations_NN_01.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mentor_demonstrations_NN_02.csv', 'r', newline='') as csvfile:
+    with open('mountaincar_mentor_demonstrations_NN_02.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mentor_demonstrations_NN_03.csv', 'r', newline='') as csvfile:
+    with open('mountaincar_mentor_demonstrations_NN_03.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
-    with open('mentor_demonstrations_NN_04.csv', 'r', newline='') as csvfile:
+    with open('mountaincar_mentor_demonstrations_NN_04.csv', 'r', newline='') as csvfile:
         data_reader = csv.reader(csvfile, delimiter=',')
         for r in data_reader:
             mentor_tr.append([float(i) for i in r])
@@ -381,7 +381,7 @@ def readMentorExperieces():
 def similarityCheck(obs, ment, ment_act):
     # Check if the new state s' is similar to any state visited by the mentor.
     # The similarity threshold is set heuristicaly to 20% difference.
-    sim_thres_perc = 5
+    sim_thres_perc = 20
     similarities = []
 
     for i in range(len(ment)-1):
@@ -398,7 +398,7 @@ def similarityCheck(obs, ment, ment_act):
     return similarities
 
 def updateMentorActions(obs, new_obs, ment, ment_act, simList, action, env):
-    sim_thres_perc = 5
+    sim_thres_perc = 20
     mentor_actions_index_list = []
 
     for i in simList:
@@ -432,7 +432,18 @@ def updateMentorActions(obs, new_obs, ment, ment_act, simList, action, env):
 
     return mentor_actions_index_list
 
-if __name__ == '__main__':
+def updateOldErrors():
+
+    return
+
+
+def augmentReward(rew, obs, ment, index):
+    bias = 20
+    newReward = rew + bias
+    
+    return newReward
+
+def deepImitation(fileName, mode):
     try:
         with U.make_session():
             # Create the environment
@@ -441,18 +452,10 @@ if __name__ == '__main__':
             tf.get_default_session().run(init_op)
 
             # env = gym.make("CartPole-v0")
-            # env = gym.make("MountainCar-v0")
-            env = gym.make("Acrobot-v1")
+            env = gym.make("MountainCar-v0")
             
             _gamma = 0.99
             oscillating = False
-            mode = "0"
-
-
-            print("Press 1 to enable imitation, 2 otherwise")
-            while mode != "1" and mode != "2":
-                mode = input("--> ")
-
             mentor_tr = readMentorExperieces()
 
             # Size of mentor's transitions
@@ -471,8 +474,7 @@ if __name__ == '__main__':
             )
             # Create the replay buffer
             print("--Initializing experience replay buffer..")
-            # replay_buffer = ReplayBuffer(4)
-            replay_buffer = ReplayBuffer(50000)
+            replay_buffer = ReplayBuffer(4)
             # Create the schedule for exploration starting from 1 (every action is random) down to
             # 0.02 (98% of actions are selected according to values predicted by the model).
             exploration = LinearSchedule(schedule_timesteps=10000, initial_p=1.0, final_p=0.02)
@@ -499,7 +501,7 @@ if __name__ == '__main__':
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                             0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                             0.0, 0.0]
-            y = [-480]
+            y = [-200]
 
             while True:
                 # Take action and update exploration to the newest value
@@ -511,7 +513,7 @@ if __name__ == '__main__':
                     similarity_list = similarityCheck(obs, mentor_tr, mentor_tr_actions)
                     similarity = len(similarity_list) != 0
                     if similarity and not is_solved:
-                        
+                        # rew = augmentReward(rew, obs, mentor_tr, similarity_list)
                         ment_index_list = updateMentorActions(obs, new_obs, mentor_tr, mentor_tr_actions, similarity_list, action, env)
                         if len(ment_index_list) > 0:
                             ment_index = random.choice(ment_index_list)
@@ -539,11 +541,17 @@ if __name__ == '__main__':
                 obs = new_obs
                 episode_rewards[-1] += rew
 
+                # Detect oscilation or stalling of reward
+                if len(episode_rewards) > 200 and abs(np.mean(episode_rewards[-101:-1]) - np.mean(episode_rewards[-201:-101])) <= 5:
+                    oscillating = True
+                else:
+                    oscillating = False
+
                 if done:
                     obs = env.reset()
                     episode_rewards.append(0)
 
-                is_solved = t > 100 and np.mean(episode_rewards[-101:-1]) >= -85
+                is_solved = t > 100 and np.mean(episode_rewards[-101:-1]) >= 190
 
                 if is_solved:
                     # Show off the result
@@ -563,6 +571,9 @@ if __name__ == '__main__':
                         update_target()
 
                 if done and len(episode_rewards) % 10 == 0:
+
+                    if oscillating:
+                        print("OSCILLATING")
                     
                     y.append(np.mean(episode_rewards[-101:-1]))
                     cnt = 0
@@ -576,21 +587,21 @@ if __name__ == '__main__':
                     logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
                     logger.dump_tabular()
 
-                    with open("log-imitation-00.csv",  mode='a') as csvfile:
+                    with open(fileName,  mode='a') as csvfile:
                             filewriter = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                             filewriter.writerow([len(episode_rewards), np.mean(episode_rewards[-101:-1])])
                     
                     if(len(episode_rewards) >= 1000):
-                        exit()   
+                        return None   
 
                     x = np.linspace(0, len(episode_rewards), num=len(y))
                     xmax = len(episode_rewards)
                     
                     plt.clf()
                     plt.plot(x, y, label='mean episode reward')
-                    plt.axis([0, xmax, -480, -60])
+                    plt.axis([0, xmax, -210, 0])
                     plt.xticks(np.arange(0, len(episode_rewards), step=50), rotation=45)
-                    plt.yticks(np.arange(-480, -60, step=10))
+                    plt.yticks(np.arange(-210, 0, step=10))
                     plt.xlabel('time')
                     plt.ylabel('reward')
                     plt.title("deep_imitation: mean episode reward")
@@ -608,9 +619,9 @@ if __name__ == '__main__':
 
             plt.clf()
             plt.plot(x, y, label='mean episode reward')
-            plt.axis([0, xmax, -480, -60])
+            plt.axis([0, xmax, -210, 0])
             plt.xticks(np.arange(0, len(episode_rewards), step=50), rotation=45)
-            plt.yticks(np.arange(-480, -60, step=10))
+            plt.yticks(np.arange(-210, 0, step=10))
             plt.xlabel('time')
             plt.ylabel('reward')
             plt.title("deep_imitation: mean episode reward")
@@ -622,5 +633,16 @@ if __name__ == '__main__':
         except Exception:
             print("\nAn Exception occured...")
             print("Exiting")
-    exit()
+    return None
     plt.show()
+
+if __name__ == '__main__':
+    print(str(sys.argv))
+    fileIndex = str(sys.argv[1])
+    if int(sys.argv[1]) < 10:
+      fileIndex = '0'+str(sys.argv[1])
+    # No Imitation
+    # deepImitation('log-control-'+fileIndex+'.csv', "2")
+
+    # Imitation
+    deepImitation('log-imitaiton-'+fileIndex+'.csv', "1")

@@ -19,6 +19,7 @@ def input_data(path):
         i+=1
     print(len(data))
     for index in range(20):
+        print(index)
         tmp = data[index]
         for i in range(len(tmp)):
             sumCon[i] += tmp[i][1]
@@ -41,4 +42,4 @@ def input_data(path):
             filewriter.writerow([steps[i], sumCon[i], sumObs[i]])
 
 
-input_data("logs/mountaincar")
+input_data("logs/mountaincar_no_replay")
